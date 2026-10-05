@@ -42,11 +42,12 @@ DSH 的插件可以只有主机端（`Config` schemastery 对象**就是**设置
 结论：**只画背景层是看不见效果的**，必须同时把应用表面的颜色改成半透明。于是插件覆盖两个 token：
 
 - `--dsw-alias-bg-base` → 改成 `rgba(255,255,255,A)`（浅色）/ `rgba(21,21,23,A)`（深色）。这两个基色是 DSH 自己的 token 值 `[C]`（light `#fff` / dark `#151517`），所以覆盖后颜色依然正确，只是多了 alpha。
-- `--dsw-specific-sidebar-fill` → 侧边栏颜色**在构建期无法得知**（可能是主题插件给的任意值），而 CSS 自定义属性**不能自我引用**来生成 alpha。所以运行时先 `getComputedStyle(document.body).getPropertyValue('--dsw-specific-sidebar-fill')` **捕获一次原值**，再用 `color-mix(in srgb, <base> N%, transparent)` 生成半透明版本。
-  - 捕获时**拒绝**以 `color-mix(` 开头的值 —— 那是插件自己的产物，HMR 重载时若捕获到就会反复叠加 alpha；
-  - **捕获不到就整个不覆盖该 token**，绝不猜别人的表面颜色。
+- `--dsw-specific-sidebar-fill` → **默认直接给主界面那个 `rgba(...)`**，也就是侧边栏与主界面同色同深度。
+  - 为什么不能沿用 DSH 自己的侧边栏色：它是**另一个颜色** `[C]`（深色主题 `#1b1b1c`，实测 computed 为 `color(srgb 0.105882 0.105882 0.109804 / A)`），与主界面的 `#151517` 在**同一个 alpha** 下渲染出来的观感深浅并不一致 —— 这正是用户会看到「边栏和主对话框的背景颜色深度不同」的原因。要「同深度」，两边必须用同一个基色。
+  - 用户在设置里打开「自定义边栏深度」后，侧边栏改用 `sidebarOpacity`（默认 0.72，与常量相同）。基色仍是主界面那个，所以变化只体现在深度上。
+  - **不画图时**（`enabled` 为假或没有配图）侧边栏要还原成 DSH 自己的颜色，所以运行时先 `getComputedStyle(document.body).getPropertyValue('--dsw-specific-sidebar-fill')` **捕获一次原值**；捕获时**拒绝**以 `color-mix(` 开头的值（那是**早期版本**的产物 —— 1.1.0 之前这里用 `color-mix` 生成半透明侧边栏色，热重载时可能还留在页面上），并且**捕获不到就整个不覆盖该 token**，绝不猜别人的表面颜色。捕获只在「什么都不画」这一条路径上才被用到。
 
-`A` 的取值是 `surface = enabled && image !== 'none' ? SURFACE_OPACITY : 1`，其中 `SURFACE_OPACITY = 0.72` 是 `lib/config.js` 里的**常量而不是设置项**。理由：背景层在应用**下方**，把表面做成半透明是「显示一张背景」这件事本身的必要条件，不是使用者该去找的旋钮；固定成一个值也少一个需要推理的自由度。没有配图时表面保持完全不透明 —— 否则会直接透出窗口背景，而不是透出图。
+`A` 的取值是 `surface = painting ? SURFACE_OPACITY : 1`（`painting = enabled && image !== 'none'`），其中 `SURFACE_OPACITY = 0.72` 是 `lib/config.js` 里的**常量而不是设置项**。理由：背景层在应用**下方**，把表面做成半透明是「显示一张背景」这件事本身的必要条件，不是使用者该去找的旋钮；固定成一个值也少一个需要推理的自由度。没有配图时表面保持完全不透明 —— 否则会直接透出窗口背景，而不是透出图。
 
 ## 4. 背景层的几何
 
@@ -124,6 +125,8 @@ html[data-dsh-dbg] body::before {
 | 与其它插件共存 | 同 profile 装 `dshmarket` + `dsh-whale-widget` | 各自路由 200、各自命名空间 404 互不干扰、两个客户端 bundle 同图、导航并列、零异常 |
 | 命名空间边界 | 单测 | `/dsh-desktop-background-extra` 不归本插件；卸载只释放自己的前缀 |
 | 面板文字只有中文 | 单测 + 无头 Chrome 截图 | 渲染整棵控件树后断言每个 label / `aria-label` / tooltip / 正文除路径与 CSS 单位外不含拉丁字母；`docs/*.png` 复拍确认 |
+| **侧边栏与主界面同深度** | 无头 Chrome 读 computed style | 开关关闭时 `._6Qf49G_sidebarCol` 与 `._6Qf49G_frame` 都是 `rgba(21, 21, 23, 0.72)`（修复前侧边栏是 `color(srgb 0.105882 0.105882 0.109804 / 0.72)`，即 `#1b1b1c`） |
+| 自定义边栏深度生效 | 同上 | 打开并把深度设为 35% → 侧边栏 `rgba(21, 21, 23, 0.35)`，主界面仍是 `rgba(21, 21, 23, 0.72)` |
 | 宿主错误文案已汉化 | 单测 | 已知英文措辞（`lib/http.js` / `lib/routes.js` / `lib/store.js` 的文本）映射为中文，原文保留在 `title`；未知措辞原样透出而不是吞掉 |
 
 ## 9. DSH 升级时该重新确认什么

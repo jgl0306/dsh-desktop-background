@@ -10,6 +10,7 @@ import {
   DEFAULT_CONFIG,
   LIMITS,
   MAX_IMAGE_BYTES,
+  SURFACE_OPACITY,
   activeImageRef,
   clamp,
   mergeConfig,
@@ -133,6 +134,20 @@ test('a pre-1.1 configuration keeps its picture through the migration', () => {
   // An explicit `null` must clear it, not resurrect the legacy key.
   const cleared = mergeConfig(normalizeConfig({ lightImage: 'preset:aurora' }), { image: null });
   assert.equal(cleared.image, null);
+});
+
+test('the sidebar has no depth of its own until it is asked for', () => {
+  assert.equal(DEFAULT_CONFIG.customSidebar, false);
+  assert.equal(DEFAULT_CONFIG.sidebarOpacity, SURFACE_OPACITY);
+  const fresh = normalizeConfig({ enabled: true, image: 'preset:ocean' });
+  assert.equal(fresh.customSidebar, false, 'installing must not split the two surfaces apart');
+  // Only a real `true` switches it on; junk must not.
+  for (const junk of ['true', 1, {}, [], 'yes']) {
+    assert.equal(normalizeConfig({ customSidebar: junk }).customSidebar, false, `customSidebar=${JSON.stringify(junk)}`);
+  }
+  assert.equal(normalizeConfig({ customSidebar: true }).customSidebar, true);
+  assert.equal(clamp('sidebarOpacity', 99), LIMITS.sidebarOpacity.max);
+  assert.equal(clamp('sidebarOpacity', -99), LIMITS.sidebarOpacity.min);
 });
 
 test('mergeConfig applies a partial patch onto a normalized base', () => {

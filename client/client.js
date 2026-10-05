@@ -52,6 +52,7 @@ window.__ModuleLoader__.load({
       saturation: { min: 0, max: 2, step: 0.05 },
       contrast: { min: 0.5, max: 2, step: 0.05 },
       zoom: { min: 100, max: 200, step: 1 },
+      sidebarOpacity: { min: 0, max: 1, step: 0.01 },
     };
 
     /**
@@ -249,14 +250,16 @@ html[data-dsh-dbg] body::before {
      * Read the sidebar's own fill colour before anything overrides it.
      *
      * The application's sidebar paints `--dsw-specific-sidebar-fill`, whose
-     * value is not published anywhere this plugin can read at build time, and a
-     * custom property cannot reference itself to grow an alpha channel. So the
-     * live computed value is captured once, before the first override, and used
-     * as the base for the translucent variant.
+     * value is not published anywhere this plugin can read at build time. It is
+     * needed only to *restore* the sidebar: while a picture is painted the
+     * sidebar is given the surface colour instead, so that both sides share one
+     * depth. So the live computed value is captured once, before the first
+     * override, and put back when nothing is painted.
      *
-     * A value this plugin produced is refused: on a hot reload the property may
-     * already be ours, and building on top of our own output would compound the
-     * alpha on every reload.
+     * A value this plugin produced is refused: an older build tinted this
+     * property with `color-mix(...)`, and on a hot reload that value may still
+     * be in place — restoring it later would keep the sidebar unlike the stock
+     * one for good.
      *
      * @returns the original colour, or null when it could not be read.
      */
@@ -377,7 +380,8 @@ html[data-dsh-dbg] body::before {
         // Without a picture the surfaces stay opaque: a translucent surface
         // with nothing behind it would show the window through the interface,
         // which is worse than having no background.
-        const surface = enabled && image !== 'none' ? SURFACE_OPACITY : 1;
+        const painting = enabled && image !== 'none';
+        const surface = painting ? SURFACE_OPACITY : 1;
 
         const same = (value) => ({ light: value, dark: value });
         const tokens = {
@@ -391,20 +395,36 @@ html[data-dsh-dbg] body::before {
           '--dsh-dbg-saturation': same(String(saturation)),
           '--dsh-dbg-contrast': same(String(contrast)),
           '--dsh-dbg-zoom': same(String(zoom / 100)),
-          '--dsw-alias-bg-base': {
-            light: `rgba(${CANVAS.light},${surface})`,
-            dark: `rgba(${CANVAS.dark},${surface})`,
-          },
         };
 
-        // The sidebar is only tinted when the original colour was actually
-        // read: guessing it would repaint somebody else's surface with the
-        // wrong colour, so the token is left alone instead.
         const base = sidebarBaseOnce();
-        if (base !== null) {
-          tokens['--dsw-specific-sidebar-fill'] = surface === 1
-            ? same(base)
-            : same(`color-mix(in srgb, ${base} ${surface * 100}%, transparent)`);
+        if (painting) {
+          // DSH paints the sidebar with its own fill, and that fill is a
+          // *different* colour from `--dsw-alias-bg-base` — `#1b1b1c` against
+          // `#151517` on the dark theme. Two colours at one alpha read as two
+          // different depths, which is exactly what the surface colour must not
+          // do, so the sidebar is normally given the surface colour itself.
+          const sidebar = config?.customSidebar === true
+            ? clampNumber(config?.sidebarOpacity, LIMITS.sidebarOpacity, SURFACE_OPACITY)
+            : surface;
+          tokens['--dsw-alias-bg-base'] = {
+            light: `rgba(${CANVAS.light},${surface})`,
+            dark: `rgba(${CANVAS.dark},${surface})`,
+          };
+          tokens['--dsw-specific-sidebar-fill'] = {
+            light: `rgba(${CANVAS.light},${sidebar})`,
+            dark: `rgba(${CANVAS.dark},${sidebar})`,
+          };
+        } else {
+          tokens['--dsw-alias-bg-base'] = {
+            light: `rgba(${CANVAS.light},1)`,
+            dark: `rgba(${CANVAS.dark},1)`,
+          };
+          // Nothing is painted, so the sidebar goes back to DSH's own fill.
+          // It is only restored when the original colour was actually read:
+          // guessing it would repaint somebody else's surface with the wrong
+          // colour, so the token is left alone instead.
+          if (base !== null) tokens['--dsw-specific-sidebar-fill'] = same(base);
         }
 
         disposeTokens?.();
@@ -727,6 +747,31 @@ html[data-dsh-dbg] body::before {
             onChange: (event) => edit({ position: event.target.value }),
           }, POSITIONS.map((position) => h('option', { key: position, value: position }, POSITION_LABELS[position] ?? position))),
         ),
+
+        h('div', { style: { marginTop: 14 } },
+          h(Row, { label: '自定义边栏深度', htmlFor: uid + '-sidebar' },
+            h('input', {
+              id: uid + '-sidebar',
+              type: 'checkbox',
+              checked: config.customSidebar === true,
+              onChange: (event) => edit({ customSidebar: event.target.checked }),
+            }),
+            h('span', { style: { fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #9ca3af)' } },
+              '关闭时边栏与主界面背景一致'),
+          ),
+        ),
+
+        // The depth slider only means something once the sidebar has a depth of
+        // its own; until then the two surfaces share one value.
+        config.customSidebar === true
+          ? h(Slider, {
+            name: 'sidebarOpacity',
+            label: '边栏深度',
+            value: config.sidebarOpacity,
+            onChange: (value) => edit({ sidebarOpacity: value }),
+            format: (value) => `${Math.round(value * 100)}%`,
+          })
+          : null,
 
         h('div', { style: { marginTop: 16, display: 'flex', gap: 8 } },
           h('button', { type: 'button', style: buttonStyle, onClick: () => void controller.reset() },

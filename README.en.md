@@ -14,7 +14,8 @@ DSH has **no** background / wallpaper / veil facility of its own (the word `wall
 
 - Paints a fixed layer **behind** the application (`z-index: 0`, with `#root` lifted to `1`), using **one picture shared by the light and the dark theme**;
 - **Opacity, blur, brightness, saturation, contrast, zoom, 5 fill modes and 9 positions**;
-- Because DSH's own panels are opaque, it makes the **application surfaces and the sidebar 72% translucent** — without that the picture is simply hidden behind the panels. That is part of "show a background" rather than a knob to hunt for, so it has no setting of its own;
+- Because DSH's own panels are opaque, it makes the **application surface 72% translucent** — without that the picture is simply hidden behind the panels. That is part of "show a background" rather than a knob to hunt for, so it has no setting of its own;
+- The **sidebar follows the main panel by default** — DSH fills it with a different colour, so at one alpha the two sides would look like two different depths. A switch, off by default, gives the sidebar a depth of its own;
 - Pictures come from **local upload** (PNG / JPEG / WebP / GIF / AVIF, ≤ 16 MB each) or from **6 built-in gradients**.
 
 ![Settings panel](docs/03-background-panel.png)
@@ -81,9 +82,13 @@ Every change applies **immediately and is saved automatically** — no save butt
 | 缩放 (Zoom) | 100 – 200% | 100% | The floor is deliberately 100%: `scale()` below 1 would expose the layer's edges |
 | 填充 (Fit) | 覆盖 / 完整显示 / 拉伸 / 居中 / 平铺 | 覆盖 | Stored as the CSS keywords `cover` / `contain` / `stretch` / `center` / `repeat` |
 | 位置 (Position) | 9 anchors: 居中 / 顶部 / 底部 / 左侧 / 右侧 / 左上 / 右上 / 左下 / 右下 | 居中 | Shares its row with 填充 |
+| 自定义边栏深度 (Custom sidebar depth) | on / off | off | Off means the sidebar uses the **same** colour and the same depth as the main panel; turning it on reveals the slider below |
+| 边栏深度 (Sidebar depth) | 0 – 100% | 72% | Only shown while the switch above is on; sets the sidebar's depth on its own |
 | 恢复默认 (Reset) | — | — | Back to defaults (uploaded pictures are **not** deleted) |
 
-Once a picture is chosen, the application surfaces and the sidebar are shown at a fixed **72%** opacity so the picture reads through; the value is not adjustable, and turning **启用背景** off restores the stock look completely.
+Once a picture is chosen, the application surface is shown at a fixed **72%** opacity so the picture reads through; the value is not adjustable, and turning **启用背景** off restores the stock look completely.
+
+By default the sidebar **follows the main panel exactly**. DSH fills its sidebar with a different colour (`#1b1b1c` against the main panel's `#151517` on the dark theme), so at one alpha the two sides read as two different depths; the plugin therefore repaints the sidebar with the surface colour. To give the sidebar a depth of its own, turn on **自定义边栏深度** and use the **边栏深度** slider.
 
 ## Where the data lives
 
@@ -134,7 +139,7 @@ In validation, this plugin ran in one profile together with **`dshmarket`** and 
 ```sh
 git clone https://github.com/jgl0306/dsh-desktop-background.git
 cd dsh-desktop-background
-node --test          # 103 cases
+node --test          # 106 cases
 ```
 
 **No build step**: `lib/*.js` and `client/client.js` in the repository *are* the runtime artifacts. There is no `tsc` / `tsdown` / bundler stage and no `install` / `prepare` / `postinstall` script — which is also why installing straight from git is not blocked by pnpm's build-script allowlist.

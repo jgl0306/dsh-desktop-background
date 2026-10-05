@@ -279,9 +279,11 @@ test('every control in the settings panel is reachable from its label', async ()
   const labels = byTag('label');
 
   // Guard the control surface itself: a silently dropped control is as bad as a
-  // broken one, and these counts are what the browser panel shows.
+  // broken one, and these counts are what the browser panel shows. The sidebar
+  // depth slider is deliberately absent here — it only appears once the sidebar
+  // has a depth of its own.
   assert.equal(ranges.length, 6, 'expected exactly the six appearance sliders');
-  assert.equal(checkboxes.length, 1, 'expected the enable switch and nothing else');
+  assert.equal(checkboxes.length, 2, 'expected the enable switch and the custom-sidebar switch');
   assert.equal(colors.length, 0, 'the veil colour picker was removed and must not come back');
   assert.equal(selects.length, 2, 'expected the fit and position pickers');
   assert.equal(
@@ -303,6 +305,34 @@ test('every control in the settings panel is reachable from its label', async ()
   }
   const targets = labels.map((label) => label.props.htmlFor);
   assert.equal(new Set(targets).size, targets.length, 'two controls must not share one label');
+});
+
+test('the sidebar depth slider appears only once the sidebar is custom', async () => {
+  const cases = [
+    [false, 6, 2],
+    [true, 7, 2],
+  ];
+  for (const [customSidebar, expectedRanges, expectedCheckboxes] of cases) {
+    const config = { ...DISABLED.config, enabled: true, image: 'preset:aurora', customSidebar };
+    const { hosts } = await renderPanel(config);
+    const inputs = hosts.filter((node) => node.type === 'input');
+    const ranges = inputs.filter((node) => node.props.type === 'range');
+    const checkboxes = inputs.filter((node) => node.props.type === 'checkbox');
+
+    assert.equal(ranges.length, expectedRanges, `appearance sliders with customSidebar=${customSidebar}`);
+    assert.equal(checkboxes.length, expectedCheckboxes, `switches with customSidebar=${customSidebar}`);
+
+    const labelled = new Set(
+      hosts.filter((node) => node.type === 'label').map((node) => node.props.htmlFor).filter(Boolean),
+    );
+    for (const control of [...ranges, ...checkboxes]) {
+      const id = control.props.id;
+      assert.ok(
+        (id !== undefined && labelled.has(id)) || typeof control.props['aria-label'] === 'string',
+        `unlabelled control: ${JSON.stringify({ type: control.props.type, id })}`,
+      );
+    }
+  }
 });
 
 /**
@@ -479,19 +509,7 @@ test('a hostile stored reference paints nothing', async () => {
   assert.equal(tokens['--dsh-dbg-image'].light, 'none');
 });
 
-test('the sidebar is left alone when its original colour cannot be read', async () => {
-  const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
-  const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, image: 'preset:aurora' } };
-  const booted = await boot(state, { sidebarFill: '' });
-  const { ctx } = createCtx(calls, booted.document);
-  booted.exported.apply(ctx);
-  await settle();
-
-  const tokens = calls.themeOverrides.at(-1).tokens;
-  assert.equal(tokens['--dsw-specific-sidebar-fill'], undefined, 'never guess another surface\'s colour');
-});
-
-test('the sidebar is tinted from the captured colour when it is available', async () => {
+test('the sidebar shares the surface colour so both sides read as one depth', async () => {
   const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
   const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, image: 'preset:aurora' } };
   const booted = await boot(state, { sidebarFill: 'rgb(30, 32, 38)' });
@@ -500,7 +518,60 @@ test('the sidebar is tinted from the captured colour when it is available', asyn
   await settle();
 
   const tokens = calls.themeOverrides.at(-1).tokens;
-  assert.equal(tokens['--dsw-specific-sidebar-fill'].light, 'color-mix(in srgb, rgb(30, 32, 38) 72%, transparent)');
+  // DSH's own sidebar fill is a lighter grey than `--dsw-alias-bg-base`; at one
+  // alpha the two surfaces would read as two different depths, so the sidebar
+  // takes the surface colour verbatim rather than a tint of its own.
+  assert.equal(tokens['--dsw-specific-sidebar-fill'].light, tokens['--dsw-alias-bg-base'].light);
+  assert.equal(tokens['--dsw-specific-sidebar-fill'].dark, tokens['--dsw-alias-bg-base'].dark);
+  assert.equal(tokens['--dsw-specific-sidebar-fill'].dark, 'rgba(21,21,23,0.72)');
+});
+
+test('a custom sidebar depth only applies once it is switched on', async () => {
+  const depths = [
+    [false, undefined],
+    [true, { light: 'rgba(255,255,255,0.35)', dark: 'rgba(21,21,23,0.35)' }],
+  ];
+  for (const [customSidebar, expected] of depths) {
+    const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
+    const state = {
+      ...DISABLED,
+      config: { ...DISABLED.config, enabled: true, image: 'preset:aurora', customSidebar, sidebarOpacity: 0.35 },
+    };
+    const booted = await boot(state);
+    const { ctx } = createCtx(calls, booted.document);
+    booted.exported.apply(ctx);
+    await settle();
+
+    const tokens = calls.themeOverrides.at(-1).tokens;
+    // The token halves are built inside the vm realm, so they are compared
+    // field by field: `deepStrictEqual` would reject the foreign prototype.
+    const sidebar = tokens['--dsw-specific-sidebar-fill'];
+    if (expected === undefined) {
+      assert.equal(sidebar.light, tokens['--dsw-alias-bg-base'].light, 'off must not use the slider');
+    } else {
+      assert.equal(sidebar.light, expected.light);
+      assert.equal(sidebar.dark, expected.dark);
+    }
+  }
+});
+
+test('the sidebar colour is restored, not guessed, when nothing is painted', async () => {
+  const cases = [
+    ['rgb(30, 32, 38)', 'rgb(30, 32, 38)'],
+    ['', undefined],
+  ];
+  for (const [sidebarFill, expected] of cases) {
+    const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
+    const state = { ...DISABLED, config: { ...DISABLED.config, enabled: false } };
+    const booted = await boot(state, { sidebarFill });
+    const { ctx } = createCtx(calls, booted.document);
+    booted.exported.apply(ctx);
+    await settle();
+
+    const tokens = calls.themeOverrides.at(-1).tokens;
+    const sidebar = tokens['--dsw-specific-sidebar-fill'];
+    assert.equal(sidebar === undefined ? undefined : sidebar.light, expected);
+  }
 });
 
 test('fill modes map to the matching background sizing', async () => {
