@@ -19,8 +19,7 @@ import {
 
 test('defaults are inert: installing the plugin paints nothing', () => {
   assert.equal(DEFAULT_CONFIG.enabled, false);
-  assert.equal(DEFAULT_CONFIG.lightImage, null);
-  assert.equal(DEFAULT_CONFIG.darkImage, null);
+  assert.equal(DEFAULT_CONFIG.image, null);
   assert.equal(activeImageRef(DEFAULT_CONFIG), null);
 });
 
@@ -70,14 +69,12 @@ test('enum settings fall back to the default when unknown', () => {
   assert.equal(normalizeConfig({ fit: 7 }).fit, DEFAULT_CONFIG.fit);
 });
 
-test('overlayColor accepts only hex colours', () => {
-  assert.equal(normalizeConfig({ overlayColor: '#fff' }).overlayColor, '#fff');
-  assert.equal(normalizeConfig({ overlayColor: '#10203040' }).overlayColor, '#10203040');
-  assert.equal(normalizeConfig({ overlayColor: 'red' }).overlayColor, DEFAULT_CONFIG.overlayColor);
-  assert.equal(
-    normalizeConfig({ overlayColor: 'url(evil)' }).overlayColor,
-    DEFAULT_CONFIG.overlayColor,
-  );
+test('one picture serves both themes', () => {
+  const config = normalizeConfig({ enabled: true, image: 'preset:ocean' });
+  assert.equal(config.image, 'preset:ocean');
+  assert.equal(activeImageRef(config), 'preset:ocean');
+  assert.equal('lightImage' in config, false, 'the per-theme keys are gone');
+  assert.equal('darkImage' in config, false);
 });
 
 test('unknown keys are dropped, not carried forward', () => {
@@ -114,28 +111,35 @@ test('image references cannot escape the plugin data directory', () => {
 });
 
 test('activeImageRef requires the plugin to be enabled', () => {
-  const withImage = normalizeConfig({ lightImage: 'preset:aurora' });
+  const withImage = normalizeConfig({ image: 'preset:aurora' });
   assert.equal(withImage.enabled, false);
   assert.equal(activeImageRef(withImage), null);
   assert.equal(activeImageRef({ ...withImage, enabled: true }), 'preset:aurora');
 });
 
-test('activeImageRef prefers the light image and falls back to the dark one', () => {
+test('a pre-1.1 configuration keeps its picture through the migration', () => {
+  // Older versions stored a pair; the app now has a single background, so the
+  // old value is adopted rather than silently dropped.
   const both = normalizeConfig({
     enabled: true,
     lightImage: 'preset:aurora',
     darkImage: 'preset:dusk',
   });
-  assert.equal(activeImageRef(both), 'preset:aurora');
+  assert.equal(both.image, 'preset:aurora');
+
   const darkOnly = normalizeConfig({ enabled: true, darkImage: 'preset:dusk' });
-  assert.equal(activeImageRef(darkOnly), 'preset:dusk');
+  assert.equal(darkOnly.image, 'preset:dusk');
+
+  // An explicit `null` must clear it, not resurrect the legacy key.
+  const cleared = mergeConfig(normalizeConfig({ lightImage: 'preset:aurora' }), { image: null });
+  assert.equal(cleared.image, null);
 });
 
 test('mergeConfig applies a partial patch onto a normalized base', () => {
-  const base = normalizeConfig({ enabled: true, opacity: 0.4, lightImage: 'preset:ocean' });
+  const base = normalizeConfig({ enabled: true, opacity: 0.4, image: 'preset:ocean' });
   const merged = mergeConfig(base, { opacity: 0.9 });
   assert.equal(merged.opacity, 0.9);
-  assert.equal(merged.lightImage, 'preset:ocean');
+  assert.equal(merged.image, 'preset:ocean');
   assert.equal(merged.enabled, true);
 });
 
@@ -144,7 +148,7 @@ test('mergeConfig re-normalizes, so a patch cannot escape the bounds', () => {
   assert.equal(mergeConfig(base, { opacity: 99 }).opacity, LIMITS.opacity.max);
   assert.equal(mergeConfig(base, { opacity: 'x' }).opacity, DEFAULT_CONFIG.opacity);
   assert.equal(mergeConfig(base, { fit: 'nope' }).fit, DEFAULT_CONFIG.fit);
-  assert.equal(mergeConfig(base, { lightImage: '../etc/passwd' }).lightImage, null);
+  assert.equal(mergeConfig(base, { image: '../etc/passwd' }).image, null);
 });
 
 test('mergeConfig ignores non-object patches', () => {

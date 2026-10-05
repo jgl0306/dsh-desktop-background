@@ -16,7 +16,7 @@ import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { FITS, LIMITS, POSITIONS, PRESETS } from '../lib/config.js';
+import { FITS, LIMITS, POSITIONS, PRESETS, SURFACE_OPACITY } from '../lib/config.js';
 import { PRESET_GRADIENTS } from '../lib/presets.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -44,6 +44,12 @@ function literal(name) {
 
 test('the bundle declares the same numeric limits as lib/config.js', () => {
   assert.deepEqual(literal('LIMITS'), LIMITS);
+});
+
+test('the bundle keeps the same surface opacity as lib/config.js', () => {
+  // The one number both halves must agree on for the background to be visible
+  // at all: `lib/config.js` documents it, the bundle applies it.
+  assert.equal(literal('SURFACE_OPACITY'), SURFACE_OPACITY);
 });
 
 test('the bundle declares the same fill modes and positions as lib/config.js', () => {

@@ -46,7 +46,7 @@ DSH 的插件可以只有主机端（`Config` schemastery 对象**就是**设置
   - 捕获时**拒绝**以 `color-mix(` 开头的值 —— 那是插件自己的产物，HMR 重载时若捕获到就会反复叠加 alpha；
   - **捕获不到就整个不覆盖该 token**，绝不猜别人的表面颜色。
 
-`A` 的取值是**逐主题**决定的：`surface[theme] = enabled && image[theme] !== 'none' ? panelOpacity : 1`。即**某个主题没有配图时，那个主题保持完全不透明** —— 否则会直接透出窗口背景，而不是透出图。
+`A` 的取值是 `surface = enabled && image !== 'none' ? SURFACE_OPACITY : 1`，其中 `SURFACE_OPACITY = 0.72` 是 `lib/config.js` 里的**常量而不是设置项**。理由：背景层在应用**下方**，把表面做成半透明是「显示一张背景」这件事本身的必要条件，不是使用者该去找的旋钮；固定成一个值也少一个需要推理的自由度。没有配图时表面保持完全不透明 —— 否则会直接透出窗口背景，而不是透出图。
 
 ## 4. 背景层的几何
 
@@ -61,14 +61,14 @@ html[data-dsh-dbg] body::before {
 
 - `inset: calc(-2 * blur)`：图层向外扩张两倍模糊半径。否则 `blur()` 会把视口边缘的像素往外羽化，露出一圈透明边。
 - `z-index: 0` + `#root { z-index: 1 }`：DSH 的 z-index 从 10 起才被占用（dockkit 10、handle 11、leadingSeat 15、overlayLayer 20、菜单 70、hovercard 100、modal 1000、portal 1100）`[C]`，**`<= 0` 整段空闲**，所以 0 不会撞车。
-- 遮罩用 `body::after`，与 `::before` 同 `z-index` 但**晚绘制**，因此稳定地压在背景之上、内容之下。
 - **缩放下限是 100%**：`transform: scale()` 小于 1 会让图层小于视口，露出边缘。
+- 背景**只有一个图层**，浅色与深色主题共用同一张图（`--dsh-dbg-image` 的 `light`/`dark` 两半写同一个值 —— `theme.overrideTokens` 要求成对，所以仍要两半都给）。早先版本用过 `body::after` 做遮罩，现已移除。
 
 ### 为什么没有「毛玻璃 / backdrop-filter」
 
 面板的选择器是 CSS Module 的哈希类名（`_6Qf49G_frame` 之类），跨版本不稳定。要在**只给面板**加 `backdrop-filter` 而不写死这些类名，做不到。宁可少一个控件，也不上线一个**在某些版本上静默失效**的控件。
 
-（`panelOpacity` + `applyToPanels` 覆盖 token 的方案是精确的，因为它用的是 DSH 自己的变量名。）
+（半透明表面的方案是精确的，因为它覆盖的是 DSH 自己的变量名 `--dsw-alias-bg-base` / `--dsw-specific-sidebar-fill`，而不是哈希类名。）
 
 ## 5. 威胁模型
 
@@ -115,10 +115,10 @@ html[data-dsh-dbg] body::before {
 | 插件真的被加载 | 真实 boot 日志 | `dsh-desktop-background: mounted /dsh-desktop-background (profile: web)` |
 | 路由挂载且绕开 `/api` 围栏 | `GET /dsh-desktop-background/api/v1/state` | `200` + 完整 JSON（无 token） |
 | 上传 / 取图逐字节一致 | `POST /api/v1/images` → `GET /assets/<file>` | sha256 内容寻址，`cmp` 相同，响应头含 `immutable` / `nosniff` / CORP / CSP |
-| 删图清理引用 | `DELETE /api/v1/images/<file>` | `lightImage` 一并置空 |
+| 删图清理引用 | `DELETE /api/v1/images/<file>` | 配置里的 `image` 一并置空 |
 | 客户端 bundle 被发现并原样送达 | boot 图 + combo URL | `{"id":"dsh-desktop-background","url":"plugins/??…&rev=…"}`，`served.includes(source) === true` |
 | token 真的到 CSS | 无头 Chrome 读 computed style | 渐变、`opacity`、`filter`、`transform: matrix(1.3,…)`、`z-index` 全部正确；`exceptions: []` |
-| **按主题选图** | 同上 | 深色主题下画出来的是 `darkImage` 的渐变，不是 `lightImage` 的 |
+| **共用一张图** | 同上 | 浅色与深色主题下画出来的渐变相同，且两个主题的表面都是 72% 半透明 |
 | 关闭后界面复原 | 点标签文字关掉开关 | `data-dsh-dbg` 属性消失，`--dsw-alias-bg-base` 回到 `rgba(21,21,23,1)` |
 | 设置面板可用 | 点击真实 React 控件 | 滑杆写入 → 180 ms 后持久化到宿主；标签文字能驱动开关 |
 | 与其它插件共存 | 同 profile 装 `dshmarket` + `dsh-whale-widget` | 各自路由 200、各自命名空间 404 互不干扰、两个客户端 bundle 同图、导航并列、零异常 |

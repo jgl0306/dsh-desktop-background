@@ -121,7 +121,7 @@ test('writeConfig merges, normalizes, and round-trips', async () => {
   const reread = await store.readConfig();
   assert.equal(reread.opacity, 0.42);
   assert.equal(reread.enabled, true);
-  assert.equal(reread.lightImage, null);
+  assert.equal(reread.image, null);
 });
 
 test('writeConfig clamps what it is given', async () => {

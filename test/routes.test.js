@@ -126,8 +126,7 @@ test('a fresh install changes nothing until it is asked to', async () => {
   await withServer(async ({ base }) => {
     const { body } = await getJson(`${base}${ROUTE_PREFIX}/api/v1/state`);
     assert.equal(body.config.enabled, false);
-    assert.equal(body.config.lightImage, null);
-    assert.equal(body.config.darkImage, null);
+    assert.equal(body.config.image, null);
   });
 });
 
@@ -167,7 +166,7 @@ test('a configuration patch is merged, clamped, and stripped of unknown keys', a
         blur: -3,
         zoom: 10_000,
         fit: 'nonsense',
-        lightImage: 'preset:aurora',
+        image: 'preset:aurora',
         'not-a-field': 'ignored',
         __proto__: { polluted: true },
       }),
@@ -179,7 +178,7 @@ test('a configuration patch is merged, clamped, and stripped of unknown keys', a
     assert.equal(body.config.blur, 0, 'below the minimum clamps to it');
     assert.equal(body.config.zoom, 200, 'the zoom ceiling holds');
     assert.equal(body.config.fit, 'cover', 'an unknown enum falls back');
-    assert.equal(body.config.lightImage, 'preset:aurora');
+    assert.equal(body.config.image, 'preset:aurora');
     assert.equal(body.config['not-a-field'], undefined);
     assert.equal({}.polluted, undefined, 'a prototype key must not survive normalization');
   });
@@ -373,7 +372,7 @@ test('an asset is addressed by a validated name only', async () => {
   });
 });
 
-test('deleting the picture a theme points at clears that reference', async () => {
+test('deleting the picture the configuration points at clears that reference', async () => {
   await withServer(async ({ base }) => {
     const upload = await getJson(`${base}${ROUTE_PREFIX}/api/v1/images`, { method: 'POST', body: PNG });
     const ref = upload.body.image.ref;
@@ -381,7 +380,7 @@ test('deleting the picture a theme points at clears that reference', async () =>
     await getJson(`${base}${ROUTE_PREFIX}/api/v1/config`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ enabled: true, lightImage: ref }),
+      body: JSON.stringify({ enabled: true, image: ref }),
     });
 
     const removed = await getJson(`${base}${ROUTE_PREFIX}/api/v1/images/${upload.body.image.file}`, {
@@ -391,7 +390,7 @@ test('deleting the picture a theme points at clears that reference', async () =>
     assert.equal(removed.body.removed, true);
     // A reference left behind would render an empty backdrop with no
     // explanation, so it is cleared together with the file.
-    assert.equal(removed.body.state.config.lightImage, null);
+    assert.equal(removed.body.state.config.image, null);
     assert.deepEqual(removed.body.state.images, []);
 
     const asset = await fetch(`${base}${ROUTE_PREFIX}/assets/${upload.body.image.file}`);
@@ -410,13 +409,13 @@ test('deleting an unrelated picture leaves the configuration alone', async () =>
     await getJson(`${base}${ROUTE_PREFIX}/api/v1/config`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ lightImage: first.body.image.ref }),
+      body: JSON.stringify({ image: first.body.image.ref }),
     });
 
     const removed = await getJson(`${base}${ROUTE_PREFIX}/api/v1/images/${other.body.image.file}`, {
       method: 'DELETE',
     });
-    assert.equal(removed.body.state.config.lightImage, first.body.image.ref);
+    assert.equal(removed.body.state.config.image, first.body.image.ref);
   });
 });
 

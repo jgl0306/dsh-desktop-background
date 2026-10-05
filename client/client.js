@@ -52,9 +52,14 @@ window.__ModuleLoader__.load({
       saturation: { min: 0, max: 2, step: 0.05 },
       contrast: { min: 0.5, max: 2, step: 0.05 },
       zoom: { min: 100, max: 200, step: 1 },
-      overlayOpacity: { min: 0, max: 0.9, step: 0.01 },
-      panelOpacity: { min: 0.2, max: 1, step: 0.01 },
     };
+
+    /**
+     * How opaque the application's own surfaces stay while a background is
+     * shown. Mirrored from `lib/config.js`, which explains why it is a constant
+     * rather than a setting.
+     */
+    const SURFACE_OPACITY = 0.72;
 
     /** Fill modes, mirrored from `lib/config.js`. */
     const FITS = ['cover', 'contain', 'stretch', 'center', 'repeat'];
@@ -186,15 +191,6 @@ html[data-dsh-dbg] body::before {
   transform: scale(var(--dsh-dbg-zoom, 1));
   transform-origin: center center;
 }
-html[data-dsh-dbg] body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background-color: var(--dsh-dbg-overlay-color, transparent);
-  opacity: var(--dsh-dbg-overlay-opacity, 0);
-}
 `;
 
     /* ------------------------------------------------------------------ *
@@ -210,16 +206,16 @@ html[data-dsh-dbg] body::after {
       return parsed;
     }
 
-    /** The stored reference for a theme, or null. */
-    function imageRefFor(config, theme) {
+    /** The stored reference, or null when no picture is chosen. */
+    function imageRefFor(config) {
       if (config === null || config === undefined) return null;
-      const ref = theme === 'dark' ? config.darkImage : config.lightImage;
+      const ref = config.image;
       return typeof ref === 'string' && ref !== '' ? ref : null;
     }
 
     /** Turn a stored reference into a CSS `background-image` value. */
-    function imageCssFor(config, theme, presets) {
-      const ref = imageRefFor(config, theme);
+    function imageCssFor(config, presets) {
+      const ref = imageRefFor(config);
       if (ref === null) return 'none';
       if (ref.startsWith('preset:')) {
         const name = ref.slice('preset:'.length);
@@ -372,25 +368,20 @@ html[data-dsh-dbg] body::after {
         const saturation = clampNumber(config?.saturation, LIMITS.saturation, 1);
         const contrast = clampNumber(config?.contrast, LIMITS.contrast, 1);
         const zoom = clampNumber(config?.zoom, LIMITS.zoom, 100);
-        const overlayOpacity = clampNumber(config?.overlayOpacity, LIMITS.overlayOpacity, 0);
-        const panelOpacity = clampNumber(config?.panelOpacity, LIMITS.panelOpacity, 1);
         const fit = FITS.includes(config?.fit) ? config.fit : 'cover';
         const position = POSITIONS.includes(config?.position) ? config.position : 'center';
         const fitStyle = fitFor(fit);
 
-        const image = { light: 'none', dark: 'none' };
-        const surface = { light: 1, dark: 1 };
-        for (const theme of ['light', 'dark']) {
-          image[theme] = imageCssFor(config, theme, presets);
-          // A theme with no picture of its own keeps an opaque canvas: a
-          // translucent one with nothing behind it would show the window
-          // through the interface, which is worse than having no background.
-          surface[theme] = enabled && image[theme] !== 'none' ? panelOpacity : 1;
-        }
+        // One picture serves both themes, so both token halves carry it.
+        const image = imageCssFor(config, presets);
+        // Without a picture the surfaces stay opaque: a translucent surface
+        // with nothing behind it would show the window through the interface,
+        // which is worse than having no background.
+        const surface = enabled && image !== 'none' ? SURFACE_OPACITY : 1;
 
         const same = (value) => ({ light: value, dark: value });
         const tokens = {
-          '--dsh-dbg-image': { light: image.light, dark: image.dark },
+          '--dsh-dbg-image': same(image),
           '--dsh-dbg-size': same(fitStyle.size),
           '--dsh-dbg-repeat': same(fitStyle.repeat),
           '--dsh-dbg-position': same(position),
@@ -400,24 +391,20 @@ html[data-dsh-dbg] body::after {
           '--dsh-dbg-saturation': same(String(saturation)),
           '--dsh-dbg-contrast': same(String(contrast)),
           '--dsh-dbg-zoom': same(String(zoom / 100)),
-          '--dsh-dbg-overlay-color': same(typeof config?.overlayColor === 'string' ? config.overlayColor : 'transparent'),
-          '--dsh-dbg-overlay-opacity': same(String(overlayOpacity)),
           '--dsw-alias-bg-base': {
-            light: `rgba(${CANVAS.light},${surface.light})`,
-            dark: `rgba(${CANVAS.dark},${surface.dark})`,
+            light: `rgba(${CANVAS.light},${surface})`,
+            dark: `rgba(${CANVAS.dark},${surface})`,
           },
         };
 
         // The sidebar is only tinted when the original colour was actually
         // read: guessing it would repaint somebody else's surface with the
         // wrong colour, so the token is left alone instead.
-        if (config?.applyToPanels !== false) {
-          const base = sidebarBaseOnce();
-          if (base !== null) {
-            const mix = (percent) => `color-mix(in srgb, ${base} ${percent}%, transparent)`;
-            const mixed = { light: mix(surface.light * 100), dark: mix(surface.dark * 100) };
-            tokens['--dsw-specific-sidebar-fill'] = surface.light === 1 && surface.dark === 1 ? same(base) : mixed;
-          }
+        const base = sidebarBaseOnce();
+        if (base !== null) {
+          tokens['--dsw-specific-sidebar-fill'] = surface === 1
+            ? same(base)
+            : same(`color-mix(in srgb, ${base} ${surface * 100}%, transparent)`);
         }
 
         disposeTokens?.();
@@ -614,10 +601,10 @@ html[data-dsh-dbg] body::after {
       );
     }
 
-    /** The picture picker for one theme. */
+    /** The picture picker. */
     function Picker(props) {
-      const { config, images, label, theme, controller } = props;
-      const selectedRef = imageRefFor(config, theme);
+      const { config, images, label, controller } = props;
+      const selectedRef = imageRefFor(config);
       const fileRef = React.useRef(null);
 
       return h(
@@ -632,7 +619,7 @@ html[data-dsh-dbg] body::after {
             title: '不使用图片',
             selected: selectedRef === null,
             preview: null,
-            onClick: () => controller.edit(theme === 'dark' ? { darkImage: null } : { lightImage: null }),
+            onClick: () => controller.edit({ image: null }),
           }, '无'),
           PRESET_ORDER.map((name) => h(Thumb, {
             key: name,
@@ -640,7 +627,7 @@ html[data-dsh-dbg] body::after {
             title: PRESET_LABELS[name] ?? name,
             selected: selectedRef === `preset:${name}`,
             preview: PRESETS[name],
-            onClick: () => controller.edit(theme === 'dark' ? { darkImage: `preset:${name}` } : { lightImage: `preset:${name}` }),
+            onClick: () => controller.edit({ image: `preset:${name}` }),
           })),
           images.map((image) => h(Thumb, {
             key: image.file,
@@ -648,7 +635,7 @@ html[data-dsh-dbg] body::after {
             title: '已上传的图片',
             selected: selectedRef === image.ref,
             preview: `url("${API}/assets/${image.file}")`,
-            onClick: () => controller.edit(theme === 'dark' ? { darkImage: image.ref } : { lightImage: image.ref }),
+            onClick: () => controller.edit({ image: image.ref }),
           })),
           h('input', {
             ref: fileRef,
@@ -660,9 +647,7 @@ html[data-dsh-dbg] body::after {
               event.target.value = '';
               if (file === undefined) return;
               const ref = await controller.upload(file);
-              if (ref !== null) {
-                controller.edit(theme === 'dark' ? { darkImage: ref } : { lightImage: ref });
-              }
+              if (ref !== null) controller.edit({ image: ref });
             },
           }),
           h('button', { type: 'button', style: buttonStyle, onClick: () => fileRef.current?.click() }, '上传图片'),
@@ -712,8 +697,7 @@ html[data-dsh-dbg] body::after {
           ? h('div', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary, #6b7280)', margin: '6px 0' } }, snapshot.notice)
           : null,
 
-        h(Picker, { config, images, label: '浅色主题背景', theme: 'light', controller }),
-        h(Picker, { config, images, label: '深色主题背景', theme: 'dark', controller }),
+        h(Picker, { config, images, label: '背景图片', controller }),
 
         h('div', { style: { ...labelStyle, minWidth: 0, marginTop: 14, marginBottom: 2 } }, '外观'),
         h(Slider, { name: 'opacity', label: '不透明度', value: config.opacity,
@@ -744,47 +728,9 @@ html[data-dsh-dbg] body::after {
           }, POSITIONS.map((position) => h('option', { key: position, value: position }, POSITION_LABELS[position] ?? position))),
         ),
 
-        h('div', { style: { ...labelStyle, minWidth: 0, marginTop: 14, marginBottom: 2 } }, '界面与遮罩'),
-        h(Slider, { name: 'panelOpacity', label: '界面不透明度', value: config.panelOpacity,
-          onChange: (value) => edit({ panelOpacity: value }), format: (value) => `${Math.round(value * 100)}%` }),
-        h(Row, { label: '侧边栏', htmlFor: uid + '-sidebar' },
-          h('input', {
-            id: uid + '-sidebar',
-            type: 'checkbox',
-            checked: config.applyToPanels !== false,
-            onChange: (event) => edit({ applyToPanels: event.target.checked }),
-          }),
-          h('span', { style: { fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #9ca3af)' } },
-            '让侧边栏跟随同样的透明度'),
-        ),
-        h(Row, { label: '遮罩颜色', htmlFor: uid + '-veil' },
-          h('input', {
-            id: uid + '-veil',
-            type: 'color',
-            value: config.overlayColor,
-            style: { width: 40, height: 26, padding: 0, border: 'none', background: 'none' },
-            onChange: (event) => edit({ overlayColor: event.target.value }),
-          }),
-          h('input', {
-            type: 'range',
-            'aria-label': '遮罩不透明度',
-            min: LIMITS.overlayOpacity.min,
-            max: LIMITS.overlayOpacity.max,
-            step: LIMITS.overlayOpacity.step,
-            value: config.overlayOpacity,
-            style: { flex: 1, minWidth: 120 },
-            onChange: (event) => edit({ overlayOpacity: Number.parseFloat(event.target.value) }),
-          }),
-          h('span', { style: { fontSize: 12, minWidth: 44, textAlign: 'right' } },
-            `${Math.round(config.overlayOpacity * 100)}%`),
-        ),
-
         h('div', { style: { marginTop: 16, display: 'flex', gap: 8 } },
           h('button', { type: 'button', style: buttonStyle, onClick: () => void controller.reset() },
             '恢复默认'),
-        ),
-        h('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary, #9ca3af)', marginTop: 10, lineHeight: 1.6 } },
-          '图片保存在当前配置目录下的 .dsh-desktop-background/images 里，不写进插件包，升级插件也不会丢。',
         ),
       );
     }

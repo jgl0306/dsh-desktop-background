@@ -12,10 +12,9 @@ A standard DSH bundle plugin: one `dsh plugin` command to install, no session to
 
 DSH has **no** background / wallpaper / veil facility of its own (the word `wallpaper` occurs 0 times in `0.2.0-rc.2`), so this plugin builds one:
 
-- Paints a fixed layer **behind** the application (`z-index: 0`, with `#root` lifted to `1`), with a **separate picture for the light and the dark theme** and automatic switching;
+- Paints a fixed layer **behind** the application (`z-index: 0`, with `#root` lifted to `1`), using **one picture shared by the light and the dark theme**;
 - **Opacity, blur, brightness, saturation, contrast, zoom, 5 fill modes and 9 positions**;
-- An optional **veil** (any colour + opacity) to dim the picture and keep text readable;
-- Because DSH's own panels are opaque, it can also make the **application surfaces and the sidebar translucent** (`Surface opacity`) — without that the picture is simply hidden behind the panels;
+- Because DSH's own panels are opaque, it makes the **application surfaces and the sidebar 72% translucent** — without that the picture is simply hidden behind the panels. That is part of "show a background" rather than a knob to hunt for, so it has no setting of its own;
 - Pictures come from **local upload** (PNG / JPEG / WebP / GIF / AVIF, ≤ 16 MB each) or from **6 built-in gradients**.
 
 ![Settings panel](docs/03-background-panel.png)
@@ -64,8 +63,7 @@ The settings panel is **Chinese-only**, so the table below lists each control ex
 After installation the plugin is **off** (`enabled: false`, no picture chosen), so **installing it changes nothing**. Open **Settings → 背景**:
 
 1. Tick **启用背景** (Enabled);
-2. Choose a picture for **浅色主题背景** (Light theme) and **深色主题背景** (Dark theme) (click a swatch for a built-in gradient, or **上传图片** (Upload) your own). **Leaving one side empty leaves that theme without a background**;
-3. If the picture is hidden behind the panels, pull **界面不透明度** (Surface opacity) down to about 60%.
+2. Pick one under **背景图片** (Background picture) — click a swatch for a built-in gradient, or **上传图片** (Upload) your own. Choosing **无** (None) means no background at all.
 
 Every change applies **immediately and is saved automatically** — no save button, no restart.
 
@@ -74,7 +72,7 @@ Every change applies **immediately and is saved automatically** — no save butt
 | Setting | Range | Default | Notes |
 |---|---|---|---|
 | 启用背景 (Enabled) | on / off | off | When off the `data-dsh-dbg` attribute is removed and **every rule stops applying** — the interface returns to stock |
-| 浅色 / 深色主题背景 | none / preset / uploaded | none | One per active theme |
+| 背景图片 (Background picture) | none / 6 gradients / uploaded | none | One picture, shared by the light and the dark theme |
 | 不透明度 (Opacity) | 0 – 100% | 100% | Overall layer opacity |
 | 模糊 (Blur) | 0 – 40 px | 0 | The layer is grown by `2 × blur` so no transparent edge appears |
 | 亮度 (Brightness) | 20 – 200% | 100% | |
@@ -83,10 +81,9 @@ Every change applies **immediately and is saved automatically** — no save butt
 | 缩放 (Zoom) | 100 – 200% | 100% | The floor is deliberately 100%: `scale()` below 1 would expose the layer's edges |
 | 填充 (Fit) | 覆盖 / 完整显示 / 拉伸 / 居中 / 平铺 | 覆盖 | Stored as the CSS keywords `cover` / `contain` / `stretch` / `center` / `repeat` |
 | 位置 (Position) | 9 anchors: 居中 / 顶部 / 底部 / 左侧 / 右侧 / 左上 / 右上 / 左下 / 右下 | 居中 | Shares its row with 填充 |
-| 界面不透明度 (Surface opacity) | 20 – 100% | 72% | Transparency of the app surfaces and sidebar. The 20% floor keeps the interface usable |
-| 侧边栏 (Sidebar) | on / off | on | Off leaves the sidebar opaque and only makes the main area translucent |
-| 遮罩颜色 + 遮罩不透明度 | any / 0 – 90% | black / 0% | A flat colour above the picture, below the content |
 | 恢复默认 (Reset) | — | — | Back to defaults (uploaded pictures are **not** deleted) |
+
+Once a picture is chosen, the application surfaces and the sidebar are shown at a fixed **72%** opacity so the picture reads through; the value is not adjustable, and turning **启用背景** off restores the stock look completely.
 
 ## Where the data lives
 
@@ -130,14 +127,14 @@ In validation, this plugin ran in one profile together with **`dshmarket`** and 
 - Built and verified against **dsh 0.2.0-rc.2** (the version bundled with the DeepSeek Harness desktop app): the cordis `name` / `inject` / `apply` contract, `webServer.register`'s longest-prefix matching, `theme.overrideTokens`, the `settings.section` slot, the `insert` shape of `dsh.bundle.patch`, and the `dsh.client.platform` + `exports["./client"]` client-bundle delivery were all exercised on a real host;
 - **No `peerDependencies` at all**: the host half never imports cordis (`ctx` is a plain injected object), so it does not participate in the host's version gating and cannot be skipped wholesale because a peer disagrees;
 - The client half requires only `react` (a module in the platform seed table) and uses neither `react/jsx-runtime` nor any UI primitive — it draws with native elements and DSH's own CSS variables, keeping cross-version risk minimal;
-- Light and dark themes both follow `prefers-color-scheme` and DSH's theme snapshot automatically.
+- Light and dark themes both follow `prefers-color-scheme` and DSH's theme snapshot automatically; the picture is the same in both.
 
 ## Development
 
 ```sh
 git clone https://github.com/jgl0306/dsh-desktop-background.git
 cd dsh-desktop-background
-node --test          # 99 cases
+node --test          # 103 cases
 ```
 
 **No build step**: `lib/*.js` and `client/client.js` in the repository *are* the runtime artifacts. There is no `tsc` / `tsdown` / bundler stage and no `install` / `prepare` / `postinstall` script — which is also why installing straight from git is not blocked by pnpm's build-script allowlist.
@@ -158,7 +155,7 @@ tools/            screenshot.mjs — headless-Chrome/CDP probe and screenshot sc
 
 Platform contracts and design trade-offs (including what to re-check after a DSH upgrade) are in [docs/DESIGN.md](docs/DESIGN.md).
 
-The client bundle is a standalone script and **cannot `import` host modules**, so the numeric bounds exist as two copies. `test/client-parity.test.js` extracts `LIMITS`, `FITS`, `POSITIONS` and `PRESETS` out of the **source text** of `client/client.js` and `assert.deepEqual`s each against `lib/` — **the moment the two copies drift, the suite fails**.
+The client bundle is a standalone script and **cannot `import` host modules**, so the numeric bounds exist as two copies. `test/client-parity.test.js` extracts `LIMITS`, `SURFACE_OPACITY`, `FITS`, `POSITIONS` and `PRESETS` out of the **source text** of `client/client.js` and `assert.deepEqual`s each against `lib/` — **the moment the two copies drift, the suite fails**.
 
 Coverage: config normalisation and clamping, content addressing and de-duplication, magic-byte detection (including refusing SVG), path traversal, corrupt-config fallback, every endpoint's status codes and headers, cross-site refusal, oversized and malformed input, isolation of the route namespace from another plugin's, and — via `node:vm` running the **real bundle source** against stubs — the rendered tokens and the accessibility of every settings control.
 

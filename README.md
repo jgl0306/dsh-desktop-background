@@ -12,10 +12,9 @@
 
 DSH 本身**没有**背景图 / 壁纸 / 遮罩能力（`0.2.0-rc.2` 里 `wallpaper` 出现 0 次），所以这个插件自己造了一层：
 
-- 在应用**下方**（`z-index: 0`，`#root` 提到 `1`）画一个固定的背景层，支持**浅色 / 深色主题各一张图**，切换主题时自动换图；
+- 在应用**下方**（`z-index: 0`，`#root` 提到 `1`）画一个固定的背景层，**浅色与深色主题共用同一张图**；
 - 背景支持 **透明度、模糊、亮度、饱和度、对比度、缩放、填充方式（5 种）、位置（9 种）**；
-- 需要时可加一层**遮罩**（任意颜色 + 不透明度），用来压暗背景让文字更清楚；
-- 因为 DSH 的面板本身是不透明的，插件还能把**应用表面与侧边栏调成半透明**（`界面不透明度`），否则背景会被面板整块挡住 —— 只画图不改表面是看不见效果的；
+- 因为 DSH 的面板本身是不透明的，插件会把**应用表面与侧边栏调成 72% 半透明**，否则背景会被面板整块挡住 —— 只画图不改表面是看不见效果的。这是「显示背景」的一部分而不是一个要用户去调的开关，所以它没有对应的设置项；
 - 图片来源：**本地上传**（PNG / JPEG / WebP / GIF / AVIF，单张 ≤ 16 MB）或**6 条内置渐变预设**。
 
 ![设置面板](docs/03-background-panel.png)
@@ -59,11 +58,10 @@ dsh plugin --profile web add dsh-desktop-background
 
 ## 使用
 
-安装后默认是**关闭**的（`enabled: false`、两张图都是「无」），**装上不会改动任何界面外观**。打开 **设置 → 背景**：
+安装后默认是**关闭**的（`enabled: false`、图片是「无」），**装上不会改动任何界面外观**。打开 **设置 → 背景**：
 
 1. 勾选 **启用背景**；
-2. 在 **浅色主题背景**、**深色主题背景** 各选一张图（点缩略图选一个内置渐变，或点 **上传图片** 传自己的）。**某一边留空就不给那个主题加背景**；
-3. 如果背景被面板挡住，往下拉 **界面不透明度** 到 60% 左右。
+2. 在 **背景图片** 里挑一张（点缩略图选一个内置渐变，或点 **上传图片** 传自己的）。选「无」就等于不加背景；
 
 设置面板的文字**只有中文**（插件名就叫「背景」）。所有改动**即时生效并自动保存**（关掉设置窗口也不会丢），不需要点保存、不需要重启。
 
@@ -72,7 +70,7 @@ dsh plugin --profile web add dsh-desktop-background
 | 设置项 | 范围 | 默认 | 说明 |
 |---|---|---|---|
 | 启用背景 | 开 / 关 | 关 | 关掉后 `data-dsh-dbg` 属性被移除，**所有样式立即失效**，界面回到原样 |
-| 浅色 / 深色主题背景 | 无 / 预设 / 已上传图片 | 无 | 按当前生效的主题各取一张 |
+| 背景图片 | 无 / 6 条内置渐变 / 已上传图片 | 无 | 浅色与深色主题共用这一张 |
 | 不透明度 | 0 – 100% | 100% | 背景层整体透明度 |
 | 模糊 | 0 – 40 px | 0 | 背景层模糊；图层会向外扩张 `2 × blur`，避免边缘露出透明边 |
 | 亮度 | 20 – 200% | 100% | |
@@ -81,10 +79,9 @@ dsh plugin --profile web add dsh-desktop-background
 | 缩放 | 100 – 200% | 100% | 下限刻意是 100%：`scale()` 小于 1 会露出图层边缘 |
 | 填充 | 覆盖 / 完整显示 / 拉伸 / 居中 / 平铺 | 覆盖 | 内部存的是 CSS 关键字 `cover` / `contain` / `stretch` / `center` / `repeat` |
 | 位置 | 居中 / 顶部 / 底部 / 左侧 / 右侧 / 左上 / 右上 / 左下 / 右下 | 居中 | 与「填充」在界面上共占一行 |
-| 界面不透明度 | 20 – 100% | 72% | 应用表面与侧边栏的透明度。下限 20% 是为了不让界面变得不可用 |
-| 侧边栏 | 开 / 关 | 开 | 关掉则只有主区域半透明，侧边栏保持原色 |
-| 遮罩颜色 + 遮罩不透明度 | 任意色 / 0 – 90% | 黑 / 0% | 在背景之上、内容之下加一层纯色 |
 | 恢复默认 | — | — | 配置回到默认值（已上传的图片**不删**） |
+
+选定背景后，应用表面与侧边栏会固定以 **72%** 不透明度显示，让背景透出来；这个数值不可调，关掉「启用背景」即完全还原。
 
 ## 数据放在哪
 
@@ -128,14 +125,14 @@ dsh plugin --profile web add dsh-desktop-background
 - 针对 **dsh 0.2.0-rc.2**（DeepSeek Harness 桌面版内置版本）开发与验证：`name` / `inject` / `apply` 的 cordis 契约、`webServer.register` 的最长前缀匹配、`theme.overrideTokens`、`settings.section` slot、`dsh.bundle.patch` 的 `insert` 形状、`dsh.client.platform` + `exports["./client"]` 的客户端 bundle 投递全部对真实宿主验证过；
 - **不声明任何 `peerDependencies`**：主机端代码不 `import` cordis（`ctx` 是注入的普通对象），因此不会参与宿主的版本门控，也不会因为 peer 版本对不上而整个 bundle 被跳过；
 - 客户端只用 `require('react')`（平台 seed 表里的模块），不使用 `react/jsx-runtime` 或任何 UI primitives（用原生元素 + DSH 的 CSS 变量自绘），把跨版本风险压到最低；
-- 深色 / 浅色主题都会跟随 `prefers-color-scheme` 与 DSH 的主题快照切换，不需要手动改。
+- 深色 / 浅色主题都会跟随 `prefers-color-scheme` 与 DSH 的主题快照切换，不需要手动改；背景图是同一张，不做主题区分。
 
 ## 开发
 
 ```sh
 git clone https://github.com/jgl0306/dsh-desktop-background.git
 cd dsh-desktop-background
-node --test          # 99 个用例
+node --test          # 103 个用例
 ```
 
 **零构建**：仓库里的 `lib/*.js` 与 `client/client.js` 就是运行产物，没有 `tsc` / `tsdown` / bundler 步骤，也没有 `install` / `prepare` / `postinstall` 脚本 —— 所以从 git 装也不会被 pnpm 的构建脚本白名单拦下。
@@ -156,7 +153,7 @@ tools/            screenshot.mjs：无头 Chrome + CDP 的真实渲染截图/探
 
 平台契约与设计取舍（含「升级 DSH 后要复核什么」）见 [docs/DESIGN.md](docs/DESIGN.md)。
 
-客户端 bundle 是独立脚本，**无法 `import` 主机端模块**，所以数值边界在两边各有一份副本。`test/client-parity.test.js` 会从 `client/client.js` 的**源码文本**里把 `LIMITS`、`FITS`、`POSITIONS`、`PRESETS` 取出来，与 `lib/` 逐项 `assert.deepEqual` —— **两份副本一旦漂移，测试立刻失败**。
+客户端 bundle 是独立脚本，**无法 `import` 主机端模块**，所以数值边界在两边各有一份副本。`test/client-parity.test.js` 会从 `client/client.js` 的**源码文本**里把 `LIMITS`、`SURFACE_OPACITY`、`FITS`、`POSITIONS`、`PRESETS` 取出来，与 `lib/` 逐项 `assert.deepEqual` —— **两份副本一旦漂移，测试立刻失败**。
 
 测试覆盖：配置归一化与钳制、内容寻址与去重、魔数识别（含拒绝 SVG）、路径穿越、损坏配置降级、每个端点的状态码与响应头、跨站拒绝、超限与畸形编码、路由与其他插件命名空间的隔离，以及用 `node:vm` 在桩环境里执行**真实 bundle 源码**验证渲染层 token 与设置面板的控件可访问性。
 

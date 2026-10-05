@@ -11,7 +11,7 @@
  * - `apply` installs exactly one tagged stylesheet and registers into the
  *   settings slot,
  * - the published theme tokens follow the configuration, including the
- *   per-theme decision to keep the canvas opaque when a theme has no picture.
+ *   decision to keep the canvas opaque when no picture is chosen.
  */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -168,9 +168,8 @@ function createCtx(calls, document) {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const DISABLED = {
-  config: { enabled: false, lightImage: null, darkImage: null, opacity: 1, blur: 0, brightness: 1,
-    saturation: 1, contrast: 1, zoom: 100, fit: 'cover', position: 'center', overlayColor: '#000000',
-    overlayOpacity: 0, panelOpacity: 0.72, applyToPanels: true },
+  config: { enabled: false, image: null, opacity: 1, blur: 0, brightness: 1,
+    saturation: 1, contrast: 1, zoom: 100, fit: 'cover', position: 'center' },
   images: [],
   presets: [{ id: 'aurora', gradient: 'linear-gradient(#000, #fff)' }],
 };
@@ -198,6 +197,7 @@ test('apply installs exactly one stylesheet, tagged for eviction', async () => {
   assert.equal(styles[0].dataset.plugin, PLUGIN_ID);
   assert.ok(styles[0].textContent.includes('body::before'), 'the layer rule must be present');
   assert.ok(styles[0].textContent.includes('data-dsh-dbg'), 'the on/off attribute must be present');
+  assert.ok(!styles[0].textContent.includes('body::after'), 'the veil layer was removed and must not come back');
 
   for (const entry of disposers) entry.dispose?.();
   assert.equal(loaded.document.head.children.length, 0, 'unloading must remove the stylesheet');
@@ -245,7 +245,7 @@ test('every control in the settings panel is reachable from its label', async ()
   await settle();
   const registration = calls.registeredSlots.find((entry) => entry.options !== undefined);
 
-  const config = { ...DISABLED.config, enabled: true, lightImage: 'preset:aurora' };
+  const config = { ...DISABLED.config, enabled: true, image: 'preset:aurora' };
   const snapshot = { loading: false, error: null, notice: null, state: { config, images: [], presets: [] }, draft: null };
   const controller = {
     store: { subscribe: () => () => {}, get: () => snapshot, effective: () => config },
@@ -280,10 +280,14 @@ test('every control in the settings panel is reachable from its label', async ()
 
   // Guard the control surface itself: a silently dropped control is as bad as a
   // broken one, and these counts are what the browser panel shows.
-  assert.equal(ranges.length, 8, 'expected the six appearance sliders plus surface and veil opacity');
-  assert.equal(checkboxes.length, 2, 'expected the enable switch and the sidebar switch');
-  assert.equal(colors.length, 1, 'expected the veil colour picker');
+  assert.equal(ranges.length, 6, 'expected exactly the six appearance sliders');
+  assert.equal(checkboxes.length, 1, 'expected the enable switch and nothing else');
+  assert.equal(colors.length, 0, 'the veil colour picker was removed and must not come back');
   assert.equal(selects.length, 2, 'expected the fit and position pickers');
+  assert.equal(
+    inputs.filter((node) => node.props.type === 'file').length, 1,
+    'one background means one upload control',
+  );
 
   // A control must be reachable by its label: either a `<label for>` inside the
   // panel, or an explicit `aria-label`. A bare `<span>` next to an input looks
@@ -346,10 +350,14 @@ async function renderPanel(config, overrides = {}) {
 }
 
 test('the settings panel shows Chinese only', async () => {
-  const config = { ...DISABLED.config, enabled: true, lightImage: 'preset:aurora' };
+  const config = { ...DISABLED.config, enabled: true, image: 'preset:aurora' };
   const { hosts, registration } = await renderPanel(config);
 
   assert.equal(registration.options.label(), '背景', 'the nav entry must be Chinese only');
+
+  // The storage hint that used to sit under the buttons is deliberately gone.
+  const allText = hosts.flatMap((node) => node.children.filter((child) => typeof child === 'string'));
+  assert.ok(!allText.some((text) => text.includes('图片保存在')), 'the footer hint was removed and must not come back');
 
   // Every human-readable string the panel can put on screen: control labels
   // (which double as `<label>` text), accessible names, tooltips and body text.
@@ -405,11 +413,11 @@ test('a disabled configuration leaves the interface untouched', async () => {
   assert.equal(last.tokens['--dsw-alias-bg-base'].dark, 'rgba(21,21,23,1)');
 });
 
-test('an enabled preset paints the layer and makes only that theme translucent', async () => {
+test('an enabled preset paints one layer for both themes', async () => {
   const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
   const state = {
     ...DISABLED,
-    config: { ...DISABLED.config, enabled: true, lightImage: 'preset:aurora' },
+    config: { ...DISABLED.config, enabled: true, image: 'preset:aurora' },
   };
   const booted = await boot(state);
   const { ctx } = createCtx(calls, booted.document);
@@ -419,9 +427,24 @@ test('an enabled preset paints the layer and makes only that theme translucent',
   assert.equal(booted.document.documentElement.dataset.dshDbg, 'on');
   const tokens = calls.themeOverrides.at(-1).tokens;
   assert.equal(tokens['--dsh-dbg-image'].light, 'linear-gradient(#000, #fff)');
-  assert.equal(tokens['--dsh-dbg-image'].dark, 'none');
+  assert.equal(tokens['--dsh-dbg-image'].dark, 'linear-gradient(#000, #fff)', 'one picture serves both themes');
   assert.equal(tokens['--dsw-alias-bg-base'].light, 'rgba(255,255,255,0.72)');
-  assert.equal(tokens['--dsw-alias-bg-base'].dark, 'rgba(21,21,23,1)', 'a theme with no picture stays opaque');
+  assert.equal(tokens['--dsw-alias-bg-base'].dark, 'rgba(21,21,23,0.72)');
+  assert.equal(tokens['--dsh-dbg-overlay-opacity'], undefined, 'the veil tokens were removed');
+});
+
+test('an enabled configuration with no picture still keeps the surfaces opaque', async () => {
+  const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
+  const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true } };
+  const booted = await boot(state);
+  const { ctx } = createCtx(calls, booted.document);
+  booted.exported.apply(ctx);
+  await settle();
+
+  const tokens = calls.themeOverrides.at(-1).tokens;
+  assert.equal(tokens['--dsh-dbg-image'].light, 'none');
+  assert.equal(tokens['--dsw-alias-bg-base'].light, 'rgba(255,255,255,1)', 'nothing behind it, so nothing to show');
+  assert.equal(tokens['--dsw-alias-bg-base'].dark, 'rgba(21,21,23,1)');
 });
 
 test('an uploaded picture becomes a same-origin asset URL', async () => {
@@ -429,7 +452,7 @@ test('an uploaded picture becomes a same-origin asset URL', async () => {
   const file = `${'a'.repeat(64)}.png`;
   const state = {
     ...DISABLED,
-    config: { ...DISABLED.config, enabled: true, darkImage: `managed:${file}` },
+    config: { ...DISABLED.config, enabled: true, image: `managed:${file}` },
   };
   const booted = await boot(state);
   const { ctx } = createCtx(calls, booted.document);
@@ -437,6 +460,7 @@ test('an uploaded picture becomes a same-origin asset URL', async () => {
   await settle();
 
   const tokens = calls.themeOverrides.at(-1).tokens;
+  assert.equal(tokens['--dsh-dbg-image'].light, `url("/dsh-desktop-background/assets/${file}")`);
   assert.equal(tokens['--dsh-dbg-image'].dark, `url("/dsh-desktop-background/assets/${file}")`);
 });
 
@@ -444,7 +468,7 @@ test('a hostile stored reference paints nothing', async () => {
   const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
   const state = {
     ...DISABLED,
-    config: { ...DISABLED.config, enabled: true, lightImage: 'managed:../../../etc/passwd' },
+    config: { ...DISABLED.config, enabled: true, image: 'managed:../../../etc/passwd' },
   };
   const booted = await boot(state);
   const { ctx } = createCtx(calls, booted.document);
@@ -457,7 +481,7 @@ test('a hostile stored reference paints nothing', async () => {
 
 test('the sidebar is left alone when its original colour cannot be read', async () => {
   const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
-  const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, lightImage: 'preset:aurora' } };
+  const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, image: 'preset:aurora' } };
   const booted = await boot(state, { sidebarFill: '' });
   const { ctx } = createCtx(calls, booted.document);
   booted.exported.apply(ctx);
@@ -469,7 +493,7 @@ test('the sidebar is left alone when its original colour cannot be read', async 
 
 test('the sidebar is tinted from the captured colour when it is available', async () => {
   const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
-  const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, lightImage: 'preset:aurora' } };
+  const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, image: 'preset:aurora' } };
   const booted = await boot(state, { sidebarFill: 'rgb(30, 32, 38)' });
   const { ctx } = createCtx(calls, booted.document);
   booted.exported.apply(ctx);
@@ -489,7 +513,7 @@ test('fill modes map to the matching background sizing', async () => {
   ];
   for (const [fit, size, repeat] of cases) {
     const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
-    const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, lightImage: 'preset:aurora', fit } };
+    const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, image: 'preset:aurora', fit } };
     const booted = await boot(state);
     const { ctx } = createCtx(calls, booted.document);
     booted.exported.apply(ctx);
@@ -503,7 +527,7 @@ test('fill modes map to the matching background sizing', async () => {
 
 test('an unknown fill mode falls back instead of breaking the layer', async () => {
   const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
-  const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, lightImage: 'preset:aurora', fit: 'nonsense' } };
+  const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, image: 'preset:aurora', fit: 'nonsense' } };
   const booted = await boot(state);
   const { ctx } = createCtx(calls, booted.document);
   booted.exported.apply(ctx);
@@ -513,7 +537,7 @@ test('an unknown fill mode falls back instead of breaking the layer', async () =
 
 test('zoom is published as a scale factor around 1', async () => {
   const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
-  const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, lightImage: 'preset:aurora', zoom: 150 } };
+  const state = { ...DISABLED, config: { ...DISABLED.config, enabled: true, image: 'preset:aurora', zoom: 150 } };
   const booted = await boot(state);
   const { ctx } = createCtx(calls, booted.document);
   booted.exported.apply(ctx);
