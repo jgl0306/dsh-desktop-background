@@ -63,6 +63,34 @@ window.__ModuleLoader__.load({
       'top left', 'top right', 'bottom left', 'bottom right',
     ];
 
+    /** Chinese-only option labels; the stored values stay CSS keywords. */
+    const FIT_LABELS = {
+      cover: '覆盖',
+      contain: '完整显示',
+      stretch: '拉伸',
+      center: '居中',
+      repeat: '平铺',
+    };
+    const POSITION_LABELS = {
+      center: '居中',
+      top: '顶部',
+      bottom: '底部',
+      left: '左侧',
+      right: '右侧',
+      'top left': '左上',
+      'top right': '右上',
+      'bottom left': '左下',
+      'bottom right': '右下',
+    };
+    const PRESET_LABELS = {
+      aurora: '极光',
+      dusk: '黄昏',
+      ocean: '海洋',
+      graphite: '石墨',
+      sunrise: '日出',
+      forest: '森林',
+    };
+
     /** Gradient presets, mirrored from `lib/presets.js` and parity-tested. */
     const PRESETS = {
       aurora: [
@@ -99,6 +127,42 @@ window.__ModuleLoader__.load({
     /** The canvas colours DSH itself paints, for the two themes. */
     const CANVAS = { light: '255,255,255', dark: '21,21,23' };
 
+    /**
+     * The host API answers in English. The panel is Chinese-only, so the known
+     * wording is mapped here; anything unrecognised is shown exactly as it
+     * arrived rather than hidden, and the raw text always stays in the tooltip.
+     * The vocabulary lives in `lib/http.js`, `lib/routes.js` and `lib/store.js`.
+     */
+    const ERROR_PATTERNS = [
+      [/^empty upload/, '上传的文件是空的'],
+      [/^image exceeds the/, '图片太大，超出了上传上限'],
+      [/^unsupported image data/, '不是支持的图片格式（仅支持 png、jpg、webp、gif、avif）'],
+      [/^no room for more images/, '图片数量已达上限，请先删掉一些'],
+      [/^BackgroundStore requires/, '无法确定当前 profile 的数据目录'],
+      [/^not a stored image name/, '这不是一个已保存的图片名'],
+      [/^no such image/, '找不到这张图片'],
+      [/^the configuration patch must be a JSON object/, '配置内容必须是 JSON 对象'],
+      [/^malformed percent-encoding/, '请求路径的编码有误'],
+      [/^request body is not valid JSON/, '请求内容不是合法的 JSON'],
+      [/^request body too large/, '请求内容太大'],
+      [/^cross-origin request refused/, '已拒绝跨站请求'],
+      [/^method not allowed/, '该操作不被允许'],
+      [/^not found/, '找不到这个接口'],
+      [/^internal error/, '后台发生了内部错误'],
+      [/^(Failed to fetch|NetworkError|Load failed)/i, '连不上后台服务'],
+    ];
+
+    /** Chinese wording for a host error, falling back to the original text. */
+    function localizeError(message) {
+      const raw = String(message);
+      const http = raw.match(/^HTTP (\d+)$/);
+      if (http !== null) return `后台返回 HTTP ${http[1]}`;
+      for (const [pattern, chinese] of ERROR_PATTERNS) {
+        if (pattern.test(raw)) return chinese;
+      }
+      return raw;
+    }
+
     /** The stylesheet, installed once and driven entirely by custom properties. */
     const CSS = `
 html[data-dsh-dbg] body { background-color: transparent !important; }
@@ -131,7 +195,6 @@ html[data-dsh-dbg] body::after {
   background-color: var(--dsh-dbg-overlay-color, transparent);
   opacity: var(--dsh-dbg-overlay-opacity, 0);
 }
-body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent; }
 `;
 
     /* ------------------------------------------------------------------ *
@@ -441,7 +504,7 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
             const response = await fetch(`${API}/api/v1/images`, { method: 'POST', body: file });
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(payload.error ?? `HTTP ${response.status}`);
-            store.set({ notice: `已添加 ${payload.image.file.slice(0, 12)}… / added`, error: null });
+            store.set({ notice: `已添加 ${payload.image.file.slice(0, 12)}…`, error: null });
             await load();
             return payload.image.ref;
           } catch (error) {
@@ -566,7 +629,7 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
           { style: { display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' } },
           h(Thumb, {
             id: 'none',
-            title: '不使用图片 / none',
+            title: '不使用图片',
             selected: selectedRef === null,
             preview: null,
             onClick: () => controller.edit(theme === 'dark' ? { darkImage: null } : { lightImage: null }),
@@ -574,7 +637,7 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
           PRESET_ORDER.map((name) => h(Thumb, {
             key: name,
             id: `preset:${name}`,
-            title: name,
+            title: PRESET_LABELS[name] ?? name,
             selected: selectedRef === `preset:${name}`,
             preview: PRESETS[name],
             onClick: () => controller.edit(theme === 'dark' ? { darkImage: `preset:${name}` } : { lightImage: `preset:${name}` }),
@@ -582,7 +645,7 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
           images.map((image) => h(Thumb, {
             key: image.file,
             id: image.ref,
-            title: image.ref,
+            title: '已上传的图片',
             selected: selectedRef === image.ref,
             preview: `url("${API}/assets/${image.file}")`,
             onClick: () => controller.edit(theme === 'dark' ? { darkImage: image.ref } : { lightImage: image.ref }),
@@ -602,7 +665,7 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
               }
             },
           }),
-          h('button', { type: 'button', style: buttonStyle, onClick: () => fileRef.current?.click() }, '上传图片 / Upload'),
+          h('button', { type: 'button', style: buttonStyle, onClick: () => fileRef.current?.click() }, '上传图片'),
         ),
       );
     }
@@ -618,7 +681,7 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
 
       if (config === null) {
         return h('div', { style: { fontSize: 13, padding: 8 } },
-          snapshot.loading ? '加载中… / Loading…' : snapshot.error ?? '配置不可用 / configuration unavailable');
+          snapshot.loading ? '加载中…' : localizeError(snapshot.error ?? '配置不可用'));
       }
 
       const images = snapshot.state?.images ?? [];
@@ -628,7 +691,7 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
         'div',
         { style: { padding: '4px 2px', fontSize: 13, maxWidth: 640 } },
 
-        h(Row, { label: '启用背景 / Enabled', htmlFor: uid + '-enabled' },
+        h(Row, { label: '启用背景', htmlFor: uid + '-enabled' },
           h('input', {
             id: uid + '-enabled',
             type: 'checkbox',
@@ -636,52 +699,55 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
             onChange: (event) => edit({ enabled: event.target.checked }),
           }),
           h('span', { style: { fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #9ca3af)' } },
-            '关闭后不修改任何界面外观 / off leaves the interface untouched'),
+            '关闭后不修改任何界面外观'),
         ),
 
         snapshot.error !== null
-          ? h('div', { style: { fontSize: 12, color: 'var(--dsw-alias-label-error, #dc2626)', margin: '6px 0' } }, snapshot.error)
+          ? h('div', {
+            style: { fontSize: 12, color: 'var(--dsw-alias-label-error, #dc2626)', margin: '6px 0' },
+            title: snapshot.error,
+          }, localizeError(snapshot.error))
           : null,
         snapshot.notice !== null
           ? h('div', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary, #6b7280)', margin: '6px 0' } }, snapshot.notice)
           : null,
 
-        h(Picker, { config, images, label: '浅色主题背景 / Light theme', theme: 'light', controller }),
-        h(Picker, { config, images, label: '深色主题背景 / Dark theme', theme: 'dark', controller }),
+        h(Picker, { config, images, label: '浅色主题背景', theme: 'light', controller }),
+        h(Picker, { config, images, label: '深色主题背景', theme: 'dark', controller }),
 
-        h('div', { style: { ...labelStyle, minWidth: 0, marginTop: 14, marginBottom: 2 } }, '外观 / Appearance'),
-        h(Slider, { name: 'opacity', label: '不透明度 / Opacity', value: config.opacity,
+        h('div', { style: { ...labelStyle, minWidth: 0, marginTop: 14, marginBottom: 2 } }, '外观'),
+        h(Slider, { name: 'opacity', label: '不透明度', value: config.opacity,
           onChange: (value) => edit({ opacity: value }), format: (value) => `${Math.round(value * 100)}%` }),
-        h(Slider, { name: 'blur', label: '模糊 / Blur', value: config.blur,
+        h(Slider, { name: 'blur', label: '模糊', value: config.blur,
           onChange: (value) => edit({ blur: value }), format: (value) => `${value}px` }),
-        h(Slider, { name: 'brightness', label: '亮度 / Brightness', value: config.brightness,
+        h(Slider, { name: 'brightness', label: '亮度', value: config.brightness,
           onChange: (value) => edit({ brightness: value }), format: (value) => `${Math.round(value * 100)}%` }),
-        h(Slider, { name: 'saturation', label: '饱和度 / Saturation', value: config.saturation,
+        h(Slider, { name: 'saturation', label: '饱和度', value: config.saturation,
           onChange: (value) => edit({ saturation: value }), format: (value) => `${Math.round(value * 100)}%` }),
-        h(Slider, { name: 'contrast', label: '对比度 / Contrast', value: config.contrast,
+        h(Slider, { name: 'contrast', label: '对比度', value: config.contrast,
           onChange: (value) => edit({ contrast: value }), format: (value) => `${Math.round(value * 100)}%` }),
-        h(Slider, { name: 'zoom', label: '缩放 / Zoom', value: config.zoom,
+        h(Slider, { name: 'zoom', label: '缩放', value: config.zoom,
           onChange: (value) => edit({ zoom: value }), format: (value) => `${value}%` }),
 
-        h(Row, { label: '填充 / Fit', htmlFor: uid + '-fit' },
+        h(Row, { label: '填充', htmlFor: uid + '-fit' },
           h('select', {
             id: uid + '-fit',
             value: config.fit,
             style: { fontSize: 12, padding: '3px 6px' },
             onChange: (event) => edit({ fit: event.target.value }),
-          }, FITS.map((fit) => h('option', { key: fit, value: fit }, fit))),
+          }, FITS.map((fit) => h('option', { key: fit, value: fit }, FIT_LABELS[fit] ?? fit))),
           h('select', {
-            'aria-label': '位置 / Position',
+            'aria-label': '位置',
             value: config.position,
             style: { fontSize: 12, padding: '3px 6px' },
             onChange: (event) => edit({ position: event.target.value }),
-          }, POSITIONS.map((position) => h('option', { key: position, value: position }, position))),
+          }, POSITIONS.map((position) => h('option', { key: position, value: position }, POSITION_LABELS[position] ?? position))),
         ),
 
-        h('div', { style: { ...labelStyle, minWidth: 0, marginTop: 14, marginBottom: 2 } }, '界面与遮罩 / Surfaces & veil'),
-        h(Slider, { name: 'panelOpacity', label: '界面不透明度 / Surface opacity', value: config.panelOpacity,
+        h('div', { style: { ...labelStyle, minWidth: 0, marginTop: 14, marginBottom: 2 } }, '界面与遮罩'),
+        h(Slider, { name: 'panelOpacity', label: '界面不透明度', value: config.panelOpacity,
           onChange: (value) => edit({ panelOpacity: value }), format: (value) => `${Math.round(value * 100)}%` }),
-        h(Row, { label: '侧边栏 / Sidebar', htmlFor: uid + '-sidebar' },
+        h(Row, { label: '侧边栏', htmlFor: uid + '-sidebar' },
           h('input', {
             id: uid + '-sidebar',
             type: 'checkbox',
@@ -689,9 +755,9 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
             onChange: (event) => edit({ applyToPanels: event.target.checked }),
           }),
           h('span', { style: { fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #9ca3af)' } },
-            '让侧边栏跟随同样的透明度 / make the sidebar translucent too'),
+            '让侧边栏跟随同样的透明度'),
         ),
-        h(Row, { label: '遮罩颜色 / Veil', htmlFor: uid + '-veil' },
+        h(Row, { label: '遮罩颜色', htmlFor: uid + '-veil' },
           h('input', {
             id: uid + '-veil',
             type: 'color',
@@ -701,7 +767,7 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
           }),
           h('input', {
             type: 'range',
-            'aria-label': '遮罩不透明度 / Veil opacity',
+            'aria-label': '遮罩不透明度',
             min: LIMITS.overlayOpacity.min,
             max: LIMITS.overlayOpacity.max,
             step: LIMITS.overlayOpacity.step,
@@ -715,12 +781,10 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
 
         h('div', { style: { marginTop: 16, display: 'flex', gap: 8 } },
           h('button', { type: 'button', style: buttonStyle, onClick: () => void controller.reset() },
-            '恢复默认 / Reset'),
+            '恢复默认'),
         ),
         h('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-tertiary, #9ca3af)', marginTop: 10, lineHeight: 1.6 } },
-          '图片保存在当前 profile 的 .dsh-desktop-background/images 目录，不写入插件包，升级插件不会丢失。',
-          h('br'),
-          'Pictures are stored in the current profile, not in the installed package, so upgrading the plugin keeps them.',
+          '图片保存在当前配置目录下的 .dsh-desktop-background/images 里，不写进插件包，升级插件也不会丢。',
         ),
       );
     }
@@ -776,7 +840,7 @@ body[data-dsh-dbg-hide-frame-background="1"] { --dsw-alias-bg-base: transparent;
             name: 'settings.section',
             id: PLUGIN_ID,
             order: 100,
-            label: () => '背景 / Background',
+            label: () => '背景',
             inject: () => ({}),
           },
           () => h(ControllerContext.Provider, { value: controller }, h(BackgroundSection)),

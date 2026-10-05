@@ -159,8 +159,14 @@ try {
   await sleep(2000);
   await shot('02-settings-nav');
 
-  await evaluate(`[...document.querySelectorAll('*')]
-    .filter((el) => (el.textContent || '').trim() === '背景 / Background').pop()?.click()`);
+  // The nav entry is labelled 背景; older builds were bilingual.
+  await evaluate(`(() => {
+    for (const wanted of ['背景', '背景 / Background']) {
+      const target = [...document.querySelectorAll('*')]
+        .filter((el) => (el.textContent || '').trim() === wanted).pop();
+      if (target) { target.click(); return; }
+    }
+  })()`);
   await waitFor('document.querySelectorAll("input[type=range]").length > 0', 'the background controls');
   await sleep(1200);
   await shot('03-background-panel');

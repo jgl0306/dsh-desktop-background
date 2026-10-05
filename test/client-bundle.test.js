@@ -301,6 +301,97 @@ test('every control in the settings panel is reachable from its label', async ()
   assert.equal(new Set(targets).size, targets.length, 'two controls must not share one label');
 });
 
+/**
+ * Render the registered settings section against a stubbed controller.
+ *
+ * @param config - the effective configuration the panel should display.
+ * @param overrides - extra store snapshot fields, e.g. `error` or `notice`.
+ * @returns the host elements, the slot registration, and the snapshot used.
+ */
+async function renderPanel(config, overrides = {}) {
+  const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
+  const { ctx } = createCtx(calls, loaded.document);
+  loaded.exported.apply(ctx);
+  await settle();
+  const registration = calls.registeredSlots.find((entry) => entry.options !== undefined);
+
+  const snapshot = {
+    loading: false,
+    error: null,
+    notice: null,
+    state: { config, images: [], presets: [] },
+    draft: null,
+    ...overrides,
+  };
+  const controller = {
+    store: { subscribe: () => () => {}, get: () => snapshot, effective: () => config },
+    edit: () => {},
+    reset: async () => {},
+    upload: async () => null,
+  };
+
+  // The panel takes its controller from context; the stub returns ours so the
+  // real component body renders without a React runtime.
+  const realUseContext = reactStub.useContext;
+  const realUseSyncExternalStore = reactStub.useSyncExternalStore;
+  reactStub.useContext = () => controller;
+  reactStub.useSyncExternalStore = (_subscribe, get) => get();
+  resetReactIdSequence();
+  try {
+    return { hosts: renderHosts(registration.component()), registration };
+  } finally {
+    reactStub.useContext = realUseContext;
+    reactStub.useSyncExternalStore = realUseSyncExternalStore;
+  }
+}
+
+test('the settings panel shows Chinese only', async () => {
+  const config = { ...DISABLED.config, enabled: true, lightImage: 'preset:aurora' };
+  const { hosts, registration } = await renderPanel(config);
+
+  assert.equal(registration.options.label(), '背景', 'the nav entry must be Chinese only');
+
+  // Every human-readable string the panel can put on screen: control labels
+  // (which double as `<label>` text), accessible names, tooltips and body text.
+  const texts = [];
+  for (const node of hosts) {
+    if (typeof node.props['aria-label'] === 'string') texts.push(node.props['aria-label']);
+    if (typeof node.props.title === 'string') texts.push(node.props.title);
+    for (const child of node.children) {
+      if (typeof child === 'string') texts.push(child);
+    }
+  }
+  assert.ok(texts.length >= 20, `expected the panel to render plenty of text, saw ${texts.length}`);
+
+  for (const text of texts) {
+    assert.ok(!/ \/ /.test(text), `bilingual wording left in the panel: ${JSON.stringify(text)}`);
+    // A filesystem path and a CSS unit are allowed to be Latin; prose is not.
+    const prose = text
+      .replace(/[A-Za-z0-9._-]*\/[A-Za-z0-9._/-]+/g, '')
+      .replace(/\d+\s*(?:px|%|em|rem|s|ms)\b/g, '');
+    assert.ok(!/[A-Za-z]/.test(prose), `English left in the panel: ${JSON.stringify(text)}`);
+  }
+});
+
+test('host errors reach the panel in Chinese, with the original kept as a tooltip', async () => {
+  const config = { ...DISABLED.config, enabled: true };
+
+  const raw = 'unsupported image data (accepted: image/png, image/jpeg)';
+  const { hosts } = await renderPanel(config, { error: raw });
+  const banner = hosts.find((node) => node.props.title === raw);
+  assert.notEqual(banner, undefined, 'the raw wording must stay available as a tooltip');
+  assert.equal(banner.children[0], '不是支持的图片格式（仅支持 png、jpg、webp、gif、avif）');
+
+  // An unrecognised message is shown as it arrived rather than swallowed.
+  const { hosts: unknown } = await renderPanel(config, { error: 'a brand new host wording' });
+  const passthrough = unknown.find((node) => node.props.title === 'a brand new host wording');
+  assert.equal(passthrough.children[0], 'a brand new host wording');
+
+  // `HTTP 500` is built on the client, so it has its own wording.
+  const { hosts: http } = await renderPanel(config, { error: 'HTTP 503' });
+  assert.equal(http.find((node) => node.props.title === 'HTTP 503').children[0], '后台返回 HTTP 503');
+});
+
 test('a disabled configuration leaves the interface untouched', async () => {
   const calls = { fetch: [], registeredSlots: [], themeOverrides: [] };
   const { ctx } = createCtx(calls, loaded.document);

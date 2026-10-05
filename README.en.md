@@ -55,15 +55,17 @@ Remove it:
 dsh plugin --profile web add dsh-desktop-background
 ```
 
-Restart `dsh web`, then open **Settings → Background**.
+Restart `dsh web`, then open **Settings → 背景**.
 
 ## Using it
 
-After installation the plugin is **off** (`enabled: false`, no picture chosen), so **installing it changes nothing**. Open **Settings → Background**:
+The settings panel is **Chinese-only**, so the table below lists each control exactly as it appears, with an English gloss.
 
-1. Tick **Enabled**;
-2. Choose a picture for **Light theme** and **Dark theme** (click a swatch for a built-in gradient, or **Upload** your own). **Leaving one side empty leaves that theme without a background**;
-3. If the picture is hidden behind the panels, pull **Surface opacity** down to about 60%.
+After installation the plugin is **off** (`enabled: false`, no picture chosen), so **installing it changes nothing**. Open **Settings → 背景**:
+
+1. Tick **启用背景** (Enabled);
+2. Choose a picture for **浅色主题背景** (Light theme) and **深色主题背景** (Dark theme) (click a swatch for a built-in gradient, or **上传图片** (Upload) your own). **Leaving one side empty leaves that theme without a background**;
+3. If the picture is hidden behind the panels, pull **界面不透明度** (Surface opacity) down to about 60%.
 
 Every change applies **immediately and is saved automatically** — no save button, no restart.
 
@@ -71,20 +73,20 @@ Every change applies **immediately and is saved automatically** — no save butt
 
 | Setting | Range | Default | Notes |
 |---|---|---|---|
-| Enabled | on / off | off | When off the `data-dsh-dbg` attribute is removed and **every rule stops applying** — the interface returns to stock |
-| Light / dark picture | none / preset / uploaded | none | One per active theme |
-| Opacity | 0 – 100% | 100% | Overall layer opacity |
-| Blur | 0 – 40 px | 0 | The layer is grown by `2 × blur` so no transparent edge appears |
-| Brightness | 20 – 200% | 100% | |
-| Saturation | 0 – 200% | 100% | |
-| Contrast | 50 – 200% | 100% | |
-| Zoom | 100 – 200% | 100% | The floor is deliberately 100%: `scale()` below 1 would expose the layer's edges |
-| Fit | cover / contain / stretch / center / repeat | cover | |
-| Position | 9 anchors | center | |
-| Surface opacity | 20 – 100% | 72% | Transparency of the app surfaces and sidebar. The 20% floor keeps the interface usable |
-| Sidebar | on / off | on | Off leaves the sidebar opaque and only makes the main area translucent |
-| Veil colour / Veil opacity | any / 0 – 90% | black / 0% | A flat colour above the picture, below the content |
-| Reset | — | — | Back to defaults (uploaded pictures are **not** deleted) |
+| 启用背景 (Enabled) | on / off | off | When off the `data-dsh-dbg` attribute is removed and **every rule stops applying** — the interface returns to stock |
+| 浅色 / 深色主题背景 | none / preset / uploaded | none | One per active theme |
+| 不透明度 (Opacity) | 0 – 100% | 100% | Overall layer opacity |
+| 模糊 (Blur) | 0 – 40 px | 0 | The layer is grown by `2 × blur` so no transparent edge appears |
+| 亮度 (Brightness) | 20 – 200% | 100% | |
+| 饱和度 (Saturation) | 0 – 200% | 100% | |
+| 对比度 (Contrast) | 50 – 200% | 100% | |
+| 缩放 (Zoom) | 100 – 200% | 100% | The floor is deliberately 100%: `scale()` below 1 would expose the layer's edges |
+| 填充 (Fit) | 覆盖 / 完整显示 / 拉伸 / 居中 / 平铺 | 覆盖 | Stored as the CSS keywords `cover` / `contain` / `stretch` / `center` / `repeat` |
+| 位置 (Position) | 9 anchors: 居中 / 顶部 / 底部 / 左侧 / 右侧 / 左上 / 右上 / 左下 / 右下 | 居中 | Shares its row with 填充 |
+| 界面不透明度 (Surface opacity) | 20 – 100% | 72% | Transparency of the app surfaces and sidebar. The 20% floor keeps the interface usable |
+| 侧边栏 (Sidebar) | on / off | on | Off leaves the sidebar opaque and only makes the main area translucent |
+| 遮罩颜色 + 遮罩不透明度 | any / 0 – 90% | black / 0% | A flat colour above the picture, below the content |
+| 恢复默认 (Reset) | — | — | Back to defaults (uploaded pictures are **not** deleted) |
 
 ## Where the data lives
 

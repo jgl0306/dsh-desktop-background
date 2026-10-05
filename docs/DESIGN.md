@@ -123,6 +123,8 @@ html[data-dsh-dbg] body::before {
 | 设置面板可用 | 点击真实 React 控件 | 滑杆写入 → 180 ms 后持久化到宿主；标签文字能驱动开关 |
 | 与其它插件共存 | 同 profile 装 `dshmarket` + `dsh-whale-widget` | 各自路由 200、各自命名空间 404 互不干扰、两个客户端 bundle 同图、导航并列、零异常 |
 | 命名空间边界 | 单测 | `/dsh-desktop-background-extra` 不归本插件；卸载只释放自己的前缀 |
+| 面板文字只有中文 | 单测 + 无头 Chrome 截图 | 渲染整棵控件树后断言每个 label / `aria-label` / tooltip / 正文除路径与 CSS 单位外不含拉丁字母；`docs/*.png` 复拍确认 |
+| 宿主错误文案已汉化 | 单测 | 已知英文措辞（`lib/http.js` / `lib/routes.js` / `lib/store.js` 的文本）映射为中文，原文保留在 `title`；未知措辞原样透出而不是吞掉 |
 
 ## 9. DSH 升级时该重新确认什么
 
