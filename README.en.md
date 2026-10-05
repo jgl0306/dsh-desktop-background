@@ -139,7 +139,7 @@ In validation, this plugin ran in one profile together with **`dshmarket`** and 
 ```sh
 git clone https://github.com/jgl0306/dsh-desktop-background.git
 cd dsh-desktop-background
-node --test          # 106 cases
+node --test          # 108 cases
 ```
 
 **No build step**: `lib/*.js` and `client/client.js` in the repository *are* the runtime artifacts. There is no `tsc` / `tsdown` / bundler stage and no `install` / `prepare` / `postinstall` script — which is also why installing straight from git is not blocked by pnpm's build-script allowlist.

@@ -137,7 +137,7 @@ dsh plugin --profile web add dsh-desktop-background
 ```sh
 git clone https://github.com/jgl0306/dsh-desktop-background.git
 cd dsh-desktop-background
-node --test          # 106 个用例
+node --test          # 108 个用例
 ```
 
 **零构建**：仓库里的 `lib/*.js` 与 `client/client.js` 就是运行产物，没有 `tsc` / `tsdown` / bundler 步骤，也没有 `install` / `prepare` / `postinstall` 脚本 —— 所以从 git 装也不会被 pnpm 的构建脚本白名单拦下。
