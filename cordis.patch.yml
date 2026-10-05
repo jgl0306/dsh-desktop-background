@@ -1,0 +1,7 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+#
+# The `name` is the package to import, resolved from the profile's
+# node_modules; `id` is the entry id it mounts under.
+- insert:
+    - id: dsh-desktop-background
+      name: 'dsh-desktop-background'

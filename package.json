@@ -1,0 +1,53 @@
+{
+  "name": "dsh-desktop-background",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "description": "Custom background pictures for the DeepSeek Harness desktop app, with opacity, blur, brightness, fit and a translucent interface. · DSH 桌面版自定义背景图片插件，支持透明度、模糊、亮度、填充方式与半透明界面。",
+  "license": "MIT",
+  "author": "jgl0306",
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "desktop",
+    "background",
+    "wallpaper"
+  ],
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgl0306/dsh-desktop-background.git"
+  }
+}
